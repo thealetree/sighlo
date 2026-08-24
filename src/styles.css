@@ -19,10 +19,9 @@ body { margin: 0; min-width: 320px; background: var(--background); transition: b
 button, input { font: inherit; }
 button { cursor: pointer; }
 
-.app-shell { width: min(100%, 680px); min-height: 100svh; margin: auto; padding: 26px 16px 118px; }
+.app-shell { width: min(100%, 680px); min-height: 100vh; min-height: 100dvh; margin: auto; padding: calc(26px + env(safe-area-inset-top)) 16px calc(118px + env(safe-area-inset-bottom)); }
 header { display: flex; align-items: baseline; justify-content: space-between; padding: 0 4px 30px; }
 .wordmark { color: inherit; font-size: 22px; font-weight: 700; letter-spacing: -1.8px; text-decoration: none; }
-.wordmark span { color: var(--muted); }
 header p, .refresh-button { margin: 0; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; letter-spacing: .03em; }
 .refresh-button { padding: 4px 0; background: transparent; border: 0; text-decoration: underline; text-underline-offset: 3px; }
 .refresh-button:hover { color: #11110f; }
@@ -55,7 +54,7 @@ header p, .refresh-button { margin: 0; color: var(--muted); font-family: ui-mono
 .empty-state h1 { margin: 0; font-size: clamp(25px, 7vw, 35px); font-weight: 600; line-height: 1.15; letter-spacing: -.065em; }
 .empty-state p { max-width: 310px; margin: 16px 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
 
-.topic-dock { position: fixed; z-index: 2; right: max(16px, calc((100vw - 648px) / 2)); bottom: 15px; left: max(16px, calc((100vw - 648px) / 2)); }
+.topic-dock { position: fixed; z-index: 2; right: max(16px, calc((100vw - 648px) / 2)); bottom: calc(15px + env(safe-area-inset-bottom)); left: max(16px, calc((100vw - 648px) / 2)); }
 .reading-scrim { position: fixed; z-index: 2; inset: 0; width: 100%; padding: 0; cursor: default; background: rgba(12, 12, 11, .42); border: 0; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
 .topic-manager { padding: 13px 15px 11px; background: var(--dock); border-radius: var(--radius) var(--radius) 0 0; color: var(--dock-ink); }
 .eyebrow { margin: 0 0 10px; color: #9c9c96; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; }
@@ -70,7 +69,8 @@ header p, .refresh-button { margin: 0; color: var(--muted); font-family: ui-mono
 .topic-form { display: flex; align-items: center; gap: 10px; min-height: 54px; padding: 8px 10px 8px 17px; color: var(--dock-ink); background: var(--dock); border: 1px solid var(--dock-line); border-radius: var(--radius); box-shadow: 0 10px 28px rgba(0, 0, 0, .2), 0 2px 5px rgba(0, 0, 0, .12); }
 .is-open .topic-form { border-top: 1px solid var(--dock-line); border-radius: 0 0 var(--radius) var(--radius); }
 .topic-form > span { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 25px; transform: rotate(-20deg); }
-.topic-form input { flex: 1; width: 100%; min-width: 0; color: var(--dock-ink); outline: 0; background: transparent; border: 0; font-size: 15px; }
+/* 16px keeps mobile Safari from auto-zooming the page when the field is focused. */
+.topic-form input { flex: 1; width: 100%; min-width: 0; color: var(--dock-ink); outline: 0; background: transparent; border: 0; font-size: 16px; }
 .topic-form input::placeholder { color: #989893; }
 .add-button { padding: 7px 10px; color: #171716; background: #f5f5f2; border: 0; border-radius: 3px; font-size: 12px; font-weight: 700; }
 .manager-button { width: 28px; padding: 0; color: #d8d8d2; background: transparent; border: 0; font-size: 20px; line-height: 1; }

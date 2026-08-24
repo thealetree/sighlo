@@ -131,7 +131,7 @@ export default function App() {
   return (
     <main className="app-shell">
       <header>
-        <a className="wordmark" href="/" aria-label="Sighlo home">sighlo<span>.</span></a>
+        <a className="wordmark" href="/" aria-label="Sighlo home">sighlo</a>
         {activeTopics.length ? (
           <button className="refresh-button" type="button" onClick={() => void refresh()} disabled={refreshState === "loading"}>
             {refreshState === "loading" ? "refreshing" : "refresh"}

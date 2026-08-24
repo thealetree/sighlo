@@ -55,6 +55,9 @@ header p, .refresh-button { margin: 0; color: var(--muted); font-family: ui-mono
 .empty-state p { max-width: 310px; margin: 16px 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
 
 .topic-dock { position: fixed; z-index: 2; right: max(16px, calc((100vw - 648px) / 2)); bottom: calc(15px + env(safe-area-inset-bottom)); left: max(16px, calc((100vw - 648px) / 2)); }
+/* Full-width fade behind the dock, anchored to the very bottom of the viewport so it
+   always reaches the screen edge instead of stopping short below the floating pill. */
+.topic-dock::before { content: ""; position: fixed; z-index: -1; right: 0; bottom: 0; left: 0; height: 150px; pointer-events: none; background: linear-gradient(to top, var(--background) 18%, transparent); }
 .reading-scrim { position: fixed; z-index: 2; inset: 0; width: 100%; padding: 0; cursor: default; background: rgba(12, 12, 11, .42); border: 0; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
 .topic-manager { padding: 13px 15px 11px; background: var(--dock); border-radius: var(--radius) var(--radius) 0 0; color: var(--dock-ink); }
 .eyebrow { margin: 0 0 10px; color: #9c9c96; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; }
@@ -66,7 +69,7 @@ header p, .refresh-button { margin: 0; color: var(--muted); font-family: ui-mono
 .topic-row div { display: flex; gap: 10px; }
 .topic-row button { padding: 0; color: #b6b6af; font-size: 11px; background: transparent; border: 0; }
 .topic-row button:hover { color: white; }
-.topic-form { display: flex; align-items: center; gap: 10px; min-height: 54px; padding: 8px 10px 8px 17px; color: var(--dock-ink); background: var(--dock); border: 1px solid var(--dock-line); border-radius: var(--radius); box-shadow: 0 10px 28px rgba(0, 0, 0, .2), 0 2px 5px rgba(0, 0, 0, .12); }
+.topic-form { display: flex; align-items: center; gap: 10px; min-height: 54px; padding: 8px 10px 8px 17px; color: var(--dock-ink); background: var(--dock); border: 1px solid var(--dock-line); border-radius: var(--radius); }
 .is-open .topic-form { border-top: 1px solid var(--dock-line); border-radius: 0 0 var(--radius) var(--radius); }
 .topic-form > span { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 25px; transform: rotate(-20deg); }
 /* 16px keeps mobile Safari from auto-zooming the page when the field is focused. */

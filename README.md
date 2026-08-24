@@ -21,9 +21,25 @@ The site will be available at:
 
 `https://thealetree.github.io/sighlo/`
 
-GitHub Pages is a static host. The current live-news refresh uses Vite's local
-development proxy, so it needs a separate public proxy or serverless endpoint to
-work after deployment. Saved topics and cached articles still work in the static app.
+GitHub Pages is a static host with no backend, so the browser can't fetch Google
+News directly (CORS). In production the app routes the request through a CORS proxy:
+
+- **Out of the box:** it falls back to free public proxies, so live news works on
+  GitHub Pages with no extra setup. These are best-effort — they occasionally rate-limit
+  or go down, and the app retries across a few of them.
+- **For reliability (recommended):** run your own proxy and point the build at it with
+  the `VITE_NEWS_PROXY` env var. A tiny [Cloudflare Worker](https://developers.cloudflare.com/workers/)
+  is the easiest option — one that fetches `?url=<encoded feed url>`, returns the body,
+  and sends `Access-Control-Allow-Origin: *`. Then build with:
+
+  ```bash
+  VITE_NEWS_PROXY="https://your-worker.workers.dev/?url=" npm run build
+  ```
+
+  (The value is prefixed to the URL-encoded Google News feed URL.) To wire it into the
+  GitHub Actions deploy, set it as a repository variable/secret and pass it to the build step.
+
+Saved topics and cached articles work in the static app regardless.
 
 ## Current scope
 

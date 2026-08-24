@@ -1,6 +1,6 @@
 # Sighlo
 
-Local-first, topic-only personal news stream. Topics and cached articles are stored in `localStorage`; live articles come from Google News RSS through Vite's local development proxy.
+Local-first, topic-only personal news stream. Topics and cached articles are stored in `localStorage`; live articles come from Google News RSS, read through free, CORS-enabled public services so the app works on any static host with no backend.
 
 ## Run locally
 
@@ -21,25 +21,19 @@ The site will be available at:
 
 `https://thealetree.github.io/sighlo/`
 
-GitHub Pages is a static host with no backend, so the browser can't fetch Google
-News directly (CORS). In production the app routes the request through a CORS proxy:
+GitHub Pages is a static host with no backend, and Google News RSS sends no CORS
+headers, so the browser can't fetch it directly. Instead of running our own proxy,
+the app reads the feed through existing free, CORS-enabled public services:
 
-- **Out of the box:** it falls back to free public proxies, so live news works on
-  GitHub Pages with no extra setup. These are best-effort — they occasionally rate-limit
-  or go down, and the app retries across a few of them.
-- **For reliability (recommended):** run your own proxy and point the build at it with
-  the `VITE_NEWS_PROXY` env var. A tiny [Cloudflare Worker](https://developers.cloudflare.com/workers/)
-  is the easiest option — one that fetches `?url=<encoded feed url>`, returns the body,
-  and sends `Access-Control-Allow-Origin: *`. Then build with:
+1. [rss2json.com](https://rss2json.com) — returns the feed as JSON (primary).
+2. [allorigins.win](https://allorigins.win) — returns the raw RSS XML (fallback).
 
-  ```bash
-  VITE_NEWS_PROXY="https://your-worker.workers.dev/?url=" npm run build
-  ```
+No account, API key, or self-hosting is required, and the same path is used in local
+development and in production. Saved topics and cached articles work regardless.
 
-  (The value is prefixed to the URL-encoded Google News feed URL.) To wire it into the
-  GitHub Actions deploy, set it as a repository variable/secret and pass it to the build step.
-
-Saved topics and cached articles work in the static app regardless.
+These are free shared services, so they can rate-limit or go briefly unavailable; the
+app tries the fallback before giving up. The news provider is isolated in `src/news.ts`,
+so swapping in a different service (or your own endpoint) is a one-file change.
 
 ## Current scope
 
@@ -47,5 +41,3 @@ Saved topics and cached articles work in the static app regardless.
 - Add, mute, and remove local topics
 - Unified reverse-chronological feed clustered from real article headlines
 - Expandable story cards and external source links
-
-The provider is isolated in `src/news.ts`. The Vite proxy is for localhost only; deployment needs an equivalent small serverless proxy to preserve the same `/api/news` interface.

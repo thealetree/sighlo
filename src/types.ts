@@ -22,6 +22,8 @@ export type Story = {
   id: string;
   headline: string;
   summary: string;
+  bullets: string[];
+  sourceCount: number;
   topicIds: string[];
   articles: Article[];
   latestPublishedAt: string;

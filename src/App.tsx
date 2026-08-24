@@ -27,7 +27,6 @@ function StoryCard({
   const labels = story.topicIds
     .map((topicId) => topics.find((topic) => topic.id === topicId)?.label)
     .filter(Boolean);
-  const sourceCount = new Set(story.articles.map((article) => article.sourceName)).size;
 
   return (
     <article className={`story-card ${expanded ? "is-expanded" : ""}`}>
@@ -42,17 +41,23 @@ function StoryCard({
           <span>{relativeTime(story.latestPublishedAt)}</span>
         </div>
         <h2>{story.headline}</h2>
-        <span className="source-count">{sourceCount} {sourceCount === 1 ? "source" : "sources"}</span>
+        <span className="source-count">{story.sourceCount} {story.sourceCount === 1 ? "source" : "sources"}</span>
         <span className="expand-mark" aria-hidden="true">{expanded ? "−" : "+"}</span>
       </button>
       {expanded && (
         <div className="story-detail">
-          <p>{story.summary}</p>
+          {story.bullets.length > 0 && (
+            <ul className="story-summary">
+              {story.bullets.map((bullet, index) => (
+                <li key={index}>{bullet}</li>
+              ))}
+            </ul>
+          )}
           <div className="source-list">
             {story.articles.map((article) => (
               <a key={article.id} href={article.url} target="_blank" rel="noreferrer">
-                <span>{article.sourceName}</span>
-                <strong>{article.title}</strong>
+                <strong>{article.sourceName}</strong>
+                <span className="source-read">Read the full story →</span>
                 <time>{new Date(article.publishedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</time>
               </a>
             ))}

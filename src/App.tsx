@@ -243,9 +243,14 @@ export default function App() {
       <div className={`topic-dock ${managerOpen ? "is-open" : ""}`}>
         {managerOpen && (
           <div className="topic-manager" aria-label="Your topics">
-            <button className="settings-toggle" type="button" onClick={() => setThemeOpen((open) => !open)} aria-expanded={themeOpen}>
-              <span>Settings</span><span>{themeOpen ? "−" : "+"}</span>
-            </button>
+            <div className="manager-topbar">
+              <button className="settings-toggle" type="button" onClick={() => setThemeOpen((open) => !open)} aria-expanded={themeOpen}>
+                <span>Settings</span>
+                <span className={`settings-chevron ${themeOpen ? "is-open" : ""}`} aria-hidden="true">›</span>
+              </button>
+              <button className="manager-close" type="button" onClick={() => setManagerOpen(false)} aria-label="Close menu">×</button>
+            </div>
+            <div className="manager-scroll">
             {themeOpen && (
               <div className="theme-panel">
                 <div className="mode-row" role="group" aria-label="Theme mode">
@@ -310,6 +315,7 @@ export default function App() {
                 </div>
               </div>
             ))}
+            </div>
           </div>
         )}
         <form onSubmit={addTopic} className="topic-form">

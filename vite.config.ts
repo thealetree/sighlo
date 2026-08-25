@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
-  // GitHub Pages serves this project from /sighlo/, not the domain root.
-  base: "/sighlo/",
+  // Served at the root of the custom domain (sighlo.news), so assets live at "/".
+  base: "/",
   plugins: [react()],
 });

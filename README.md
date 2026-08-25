@@ -17,9 +17,28 @@ Push this project to the `thealetree/sighlo` repository. The included GitHub Act
 workflow builds and publishes it automatically on each push to `main`.
 
 In the repository, open **Settings → Pages** and set **Source** to **GitHub Actions**.
-The site will be available at:
 
-`https://thealetree.github.io/sighlo/`
+### Custom domain (sighlo.news)
+
+The site is configured to serve from the apex domain **sighlo.news** (Vite `base` is `/`
+and `public/CNAME` pins the domain). To hook it up:
+
+1. **Squarespace Domains → DNS** for `sighlo.news`, add:
+   - Four **A** records on host `@` → `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`
+   - (optional IPv6) Four **AAAA** records on `@` → `2606:50c0:8000::153`, `2606:50c0:8001::153`, `2606:50c0:8002::153`, `2606:50c0:8003::153`
+   - One **CNAME** record on host `www` → `thealetree.github.io`
+2. In the repo, **Settings → Pages → Custom domain**, enter `sighlo.news` and Save.
+3. Once GitHub's DNS check passes, tick **Enforce HTTPS** (the certificate can take a while to issue).
+
+DNS changes can take from a few minutes up to 24 hours to propagate. Because `base` is now
+`/`, the old `thealetree.github.io/sighlo/` path no longer serves the app — use the domain.
+
+### Installable web app (PWA)
+
+Sighlo ships a web app manifest, an icon, and a service worker (`public/`), so it can be
+installed to a phone or desktop and used offline (the cross-origin news requests always go
+to the network). On first visit an unobtrusive prompt offers to install: a one-tap Install
+on Android/desktop Chrome, or Share → “Add to Home Screen” instructions on iOS Safari.
 
 GitHub Pages is a static host with no backend, and the news RSS feeds send no CORS
 headers, so the browser can't fetch them directly. Instead of running our own proxy,

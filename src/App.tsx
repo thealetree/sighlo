@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { clusterArticles } from "./clustering";
+import InstallPrompt from "./InstallPrompt";
 import { fetchArticleSummary, fetchTopicArticles } from "./news";
 import { readArticles, readSettings, readThemePrefs, readTopics, saveArticles, saveSettings, saveThemePrefs, saveTopics } from "./storage";
 import { DARK_THEMES, LIGHT_THEMES, resolveThemeId, type ThemeDef, type ThemeMode, type ThemePrefs } from "./theme";
@@ -198,6 +199,7 @@ export default function App() {
 
   return (
     <main className="app-shell">
+      <InstallPrompt />
       <header>
         <a className="wordmark" href="/" aria-label="Sighlo home">sighlo</a>
         {activeTopics.length ? (

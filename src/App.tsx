@@ -344,12 +344,11 @@ export default function App() {
       </div>
       <header>
         <a className="wordmark" href="/" aria-label="Sighlo home">sighlo</a>
-        <p>your personal stream</p>
       </header>
 
       <section className="feed" aria-live="polite">
         {refreshError && <p className="feed-notice">{refreshError}</p>}
-        {refreshState === "loading" && !feed.length ? <div className="loading-state">Finding your streams<span>...</span></div> : feed.length ? (
+        {refreshState === "loading" && !feed.length ? <div className="loading-state">Finding your topics<span>...</span></div> : feed.length ? (
           feed.map((story) => (
             <StoryCard
               key={story.id}
@@ -365,7 +364,7 @@ export default function App() {
         ) : (
           <div className="empty-state">
             <span className="empty-mark">↘</span>
-            <h1>Nothing new in your streams.</h1>
+            <h1>Nothing new in your topics.</h1>
             <p>{activeTopics.length ? "Nothing new right now. Try refreshing again later." : "Add a topic below. Sighlo will only show stories you explicitly choose to follow."}</p>
           </div>
         )}
@@ -465,7 +464,7 @@ export default function App() {
               </div>
             )}
             <div className="manager-divider" />
-            <p className="eyebrow streams-heading">Your streams</p>
+            <p className="eyebrow streams-heading">Your topics</p>
             {topics.map((topic) => (
               <div className="topic-row" key={topic.id}>
                 <span className={topic.status === "muted" ? "is-muted" : ""}>{topic.label}</span>

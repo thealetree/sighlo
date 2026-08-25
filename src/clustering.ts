@@ -84,5 +84,11 @@ export function clusterArticles(articles: Article[], topics: Topic[]): Story[] {
       articles: cluster,
       latestPublishedAt: newest.publishedAt,
     };
-  }).sort((a, b) => +new Date(b.latestPublishedAt) - +new Date(a.latestPublishedAt));
+  }).sort((a, b) => {
+    // Hybrid ordering: stories that carry a real summary float above summary-less ones
+    // (mostly Google-only), and within each group the newest lead.
+    const contentGap = Number(b.bullets.length > 0) - Number(a.bullets.length > 0);
+    if (contentGap) return contentGap;
+    return +new Date(b.latestPublishedAt) - +new Date(a.latestPublishedAt);
+  });
 }

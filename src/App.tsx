@@ -1,9 +1,13 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { clusterArticles } from "./clustering";
-import { fetchTopicArticles } from "./news";
-import { readArticles, readTheme, readTopics, saveArticles, saveTheme, saveTopics } from "./storage";
-import { themes, type Theme } from "./theme";
-import type { Article, Story, Topic } from "./types";
+import { fetchArticleSummary, fetchTopicArticles } from "./news";
+import { readArticles, readSettings, readThemePrefs, readTopics, saveArticles, saveSettings, saveThemePrefs, saveTopics } from "./storage";
+import { DARK_THEMES, LIGHT_THEMES, resolveThemeId, type ThemeDef, type ThemeMode, type ThemePrefs } from "./theme";
+import type { Article, Settings, Story, Topic } from "./types";
+
+const STORY_LIMITS = [10, 20, 40, 80, 150];
+const AGE_LIMITS = [1, 3, 7, 14, 30, 90];
+const ageLabel = (days: number) => (days === 1 ? "24 hours" : `${days} days`);
 
 const relativeTime = (timestamp: string) => {
   const minutes = Math.max(1, Math.floor((Date.now() - new Date(timestamp).getTime()) / 60_000));
@@ -17,16 +21,23 @@ function StoryCard({
   story,
   topics,
   expanded,
+  enriching,
   onToggle,
 }: {
   story: Story;
   topics: Topic[];
   expanded: boolean;
+  enriching: boolean;
   onToggle: () => void;
 }) {
   const labels = story.topicIds
     .map((topicId) => topics.find((topic) => topic.id === topicId)?.label)
     .filter(Boolean);
+  const meta = [
+    labels.join(" · "),
+    `${story.sourceCount} ${story.sourceCount === 1 ? "source" : "sources"}`,
+    relativeTime(story.latestPublishedAt),
+  ].filter(Boolean).join("  |  ");
 
   return (
     <article className={`story-card ${expanded ? "is-expanded" : ""}`}>
@@ -36,22 +47,24 @@ function StoryCard({
         onClick={onToggle}
         aria-expanded={expanded}
       >
-        <div className="story-meta">
-          <span>{labels.join(" · ")}</span>
-          <span>{relativeTime(story.latestPublishedAt)}</span>
-        </div>
         <h2>{story.headline}</h2>
-        <span className="source-count">{story.sourceCount} {story.sourceCount === 1 ? "source" : "sources"}</span>
+        <p className="story-meta">{meta}</p>
         <span className="expand-mark" aria-hidden="true">{expanded ? "−" : "+"}</span>
       </button>
       {expanded && (
         <div className="story-detail">
-          {story.bullets.length > 0 && (
+          {story.bullets.length > 0 ? (
             <ul className="story-summary">
               {story.bullets.map((bullet, index) => (
                 <li key={index}>{bullet}</li>
               ))}
             </ul>
+          ) : (
+            <p className="story-summary-empty">
+              {enriching
+                ? "Pulling a summary from the source…"
+                : "No summary is available for this story — open it at the source below."}
+            </p>
           )}
           <div className="source-list">
             {story.articles.map((article) => (
@@ -74,22 +87,36 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [managerOpen, setManagerOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
-  const [theme, setTheme] = useState<Theme>(readTheme);
+  const [themePrefs, setThemePrefs] = useState<ThemePrefs>(readThemePrefs);
+  const [systemDark, setSystemDark] = useState(() => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false);
+  const [settings, setSettings] = useState<Settings>(readSettings);
   const [expandedStoryId, setExpandedStoryId] = useState<string | null>(null);
+  const [enrichingIds, setEnrichingIds] = useState<Set<string>>(() => new Set());
+  const enrichedArticleIds = useRef<Set<string>>(new Set());
   const [refreshState, setRefreshState] = useState<"idle" | "loading" | "error">("idle");
   const [refreshError, setRefreshError] = useState("");
   const activeTopics = topics.filter((topic) => topic.status === "active");
-  const feed = useMemo(
-    () => clusterArticles(articles.filter((article) => activeTopics.some((topic) => topic.id === article.topicId)), topics),
-    [activeTopics, articles, topics],
-  );
+  const feed = useMemo(() => {
+    const cutoff = Date.now() - settings.maxAgeDays * 24 * 60 * 60 * 1000;
+    const scoped = articles.filter(
+      (article) => activeTopics.some((topic) => topic.id === article.topicId) && new Date(article.publishedAt).getTime() >= cutoff,
+    );
+    return clusterArticles(scoped, topics).slice(0, settings.maxStories);
+  }, [activeTopics, articles, topics, settings.maxAgeDays, settings.maxStories]);
 
   useEffect(() => saveTopics(topics), [topics]);
   useEffect(() => saveArticles(articles), [articles]);
+  useEffect(() => saveSettings(settings), [settings]);
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    saveTheme(theme);
-  }, [theme]);
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => setSystemDark(media.matches);
+    media.addEventListener?.("change", onChange);
+    return () => media.removeEventListener?.("change", onChange);
+  }, []);
+  useEffect(() => {
+    document.documentElement.dataset.theme = resolveThemeId(themePrefs, systemDark);
+    saveThemePrefs(themePrefs);
+  }, [themePrefs, systemDark]);
 
   const refresh = async (topicsToRefresh = activeTopics) => {
     if (!topicsToRefresh.length) return;
@@ -133,6 +160,42 @@ export default function App() {
     setArticles((current) => current.filter((article) => article.topicId !== topicId));
   };
 
+  // When a summary-less story is opened, try once to pull a summary from a real publisher
+  // URL (Google's opaque links can't be resolved, so those stay link-only).
+  const enrichStory = async (story: Story) => {
+    if (story.bullets.length) return;
+    const target = story.articles.find(
+      (article) => article.url && article.sourceDomain && article.sourceDomain !== "news.google.com" && !enrichedArticleIds.current.has(article.id),
+    );
+    if (!target) return;
+    enrichedArticleIds.current.add(target.id);
+    setEnrichingIds((current) => new Set(current).add(story.id));
+    const summary = await fetchArticleSummary(target.url);
+    if (summary) {
+      setArticles((current) => current.map((article) => (article.id === target.id ? { ...article, description: summary } : article)));
+    }
+    setEnrichingIds((current) => {
+      const next = new Set(current);
+      next.delete(story.id);
+      return next;
+    });
+  };
+
+  const toggleStory = (story: Story) => {
+    setExpandedStoryId((current) => (current === story.id ? null : story.id));
+    if (expandedStoryId !== story.id) void enrichStory(story);
+  };
+
+  // Select a theme within its section. In an explicit Light/Dark mode this also switches to
+  // that mode so the choice previews immediately; in System mode it just updates the
+  // section's default (the theme used when the OS is in that mode).
+  const pickTheme = (theme: ThemeDef) =>
+    setThemePrefs((prefs) => ({
+      ...prefs,
+      [theme.mode]: theme.id,
+      mode: prefs.mode === "system" ? "system" : theme.mode,
+    }));
+
   return (
     <main className="app-shell">
       <header>
@@ -153,7 +216,8 @@ export default function App() {
               story={story}
               topics={topics}
               expanded={story.id === expandedStoryId}
-              onToggle={() => setExpandedStoryId((current) => (current === story.id ? null : story.id))}
+              enriching={enrichingIds.has(story.id)}
+              onToggle={() => toggleStory(story)}
             />
           ))
         ) : (
@@ -177,20 +241,62 @@ export default function App() {
       <div className={`topic-dock ${managerOpen ? "is-open" : ""}`}>
         {managerOpen && (
           <div className="topic-manager" aria-label="Your topics">
-            <div className="manager-heading">
-              <p className="eyebrow">Your streams</p>
-              <button className="theme-toggle" type="button" onClick={() => setThemeOpen((open) => !open)} aria-expanded={themeOpen}>
-                <span>Theme</span><span>{themeOpen ? "−" : "+"}</span>
-              </button>
-            </div>
-            {themeOpen && <div className="theme-options">
-              {themes.map(([themeId, label]) => (
-                <button key={themeId} className={theme === themeId ? "is-selected" : ""} type="button" onClick={() => setTheme(themeId)}>
-                  {label}
-                </button>
-              ))}
-            </div>}
+            <button className="settings-toggle" type="button" onClick={() => setThemeOpen((open) => !open)} aria-expanded={themeOpen}>
+              <span>Settings</span><span>{themeOpen ? "−" : "+"}</span>
+            </button>
+            {themeOpen && (
+              <div className="theme-panel">
+                <div className="mode-row" role="group" aria-label="Theme mode">
+                  {(["light", "dark", "system"] as ThemeMode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      className={themePrefs.mode === mode ? "is-selected" : ""}
+                      onClick={() => setThemePrefs((prefs) => ({ ...prefs, mode }))}
+                    >
+                      {mode === "system" ? "System" : mode === "light" ? "Light" : "Dark"}
+                    </button>
+                  ))}
+                </div>
+                {([["Light", LIGHT_THEMES, themePrefs.light], ["Dark", DARK_THEMES, themePrefs.dark]] as const).map(([heading, list, selectedId]) => (
+                  <div className="theme-section" key={heading}>
+                    <p className="eyebrow">{heading} <span className="section-note">system default when OS is {heading.toLowerCase()}</span></p>
+                    {list.map((themeDef) => (
+                      <button
+                        key={themeDef.id}
+                        type="button"
+                        className={`theme-row ${selectedId === themeDef.id ? "is-active" : ""}`}
+                        aria-pressed={selectedId === themeDef.id}
+                        onClick={() => pickTheme(themeDef)}
+                      >
+                        <span className={`theme-swatch sw-${themeDef.id}`} aria-hidden="true" />
+                        <span className="theme-name">{themeDef.label}</span>
+                        <span className="theme-check" aria-hidden="true">{selectedId === themeDef.id ? "●" : "○"}</span>
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+            {themeOpen && (
+              <div className="limits-section">
+                <p className="eyebrow">Feed limits</p>
+                <label className="limit-row">
+                  <span>Stories shown</span>
+                  <select value={settings.maxStories} onChange={(event) => setSettings((current) => ({ ...current, maxStories: Number(event.target.value) }))}>
+                    {STORY_LIMITS.map((value) => <option key={value} value={value}>{value}</option>)}
+                  </select>
+                </label>
+                <label className="limit-row">
+                  <span>Max age</span>
+                  <select value={settings.maxAgeDays} onChange={(event) => setSettings((current) => ({ ...current, maxAgeDays: Number(event.target.value) }))}>
+                    {AGE_LIMITS.map((value) => <option key={value} value={value}>{ageLabel(value)}</option>)}
+                  </select>
+                </label>
+              </div>
+            )}
             <div className="manager-divider" />
+            <p className="eyebrow streams-heading">Your streams</p>
             {topics.map((topic) => (
               <div className="topic-row" key={topic.id}>
                 <span className={topic.status === "muted" ? "is-muted" : ""}>{topic.label}</span>

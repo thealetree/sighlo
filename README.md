@@ -40,7 +40,10 @@ fills the feed. The aggregators and providers are isolated in `src/news.ts` (see
 
 - Empty first-run state with no pre-populated topics
 - Add, mute, and remove local topics
-- Unified reverse-chronological feed clustered from real article headlines, with the same
-  story from different aggregators/outlets merged into one card
-- Expandable cards that show short bullet summaries (built from publishers' own article
-  snippets, where available) plus direct links to read the full story at each source
+- Clustered feed with the same story from different aggregators/outlets merged into one
+  card; stories that carry a real summary are surfaced first, older ones drop off
+- Expandable cards showing short bullet summaries (from publishers' own article snippets,
+  fetched on demand where possible) plus direct links to read the full story at each source
+- Adjustable feed limits (number of stories, maximum age) in the Settings panel
+- Twelve themes (six light, six dark) with explicit Light/Dark selection or system matching,
+  and a per-section default used when the OS switches between light and dark

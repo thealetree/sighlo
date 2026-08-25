@@ -4,9 +4,9 @@ import { sourceKey, titleKey } from "./clustering";
 const toId = (value: string) =>
   [...value].reduce((hash, character) => ((hash << 5) - hash + character.charCodeAt(0)) | 0, 0).toString(36);
 
-// Drop items older than this so stale/evergreen results (Bing in particular mixes them
-// in) don't clutter what is meant to be a timely news stream.
-const MAX_AGE_DAYS = 30;
+// A generous sanity cap that drops clearly ancient results (Bing mixes in evergreen
+// content years old). The user's own "max age" setting refines this further at render.
+const MAX_AGE_DAYS = 90;
 
 // News RSS feeds have no CORS headers, so the browser can't fetch them directly from a
 // static host like GitHub Pages. Rather than run our own proxy, we read each feed
@@ -180,6 +180,32 @@ const FEEDS: Feed[] = [
       }),
   },
 ];
+
+// Lazily fetch a real article page (through the CORS proxy) and pull a one-line summary
+// from its metadata. Only works for real publisher URLs — Google's opaque redirect links
+// can't be resolved, so callers should skip those. Returns "" when nothing usable is found.
+export async function fetchArticleSummary(url: string): Promise<string> {
+  try {
+    if (new URL(url).hostname.endsWith("news.google.com")) return "";
+  } catch {
+    return "";
+  }
+  try {
+    const response = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(15_000) });
+    if (!response.ok) return "";
+    const document = new DOMParser().parseFromString(await response.text(), "text/html");
+    const meta = (selector: string) => document.querySelector(selector)?.getAttribute("content")?.trim() ?? "";
+    const summary =
+      meta('meta[property="og:description"]') ||
+      meta('meta[name="description"]') ||
+      meta('meta[name="twitter:description"]') ||
+      (document.querySelector("article p, main p, p")?.textContent ?? "");
+    const clean = summary.replace(/\s+/g, " ").trim();
+    return clean.length >= 40 ? clean : "";
+  } catch {
+    return "";
+  }
+}
 
 export async function fetchTopicArticles(topic: Topic): Promise<Article[]> {
   // Query every aggregator in parallel; one failing shouldn't lose the others.

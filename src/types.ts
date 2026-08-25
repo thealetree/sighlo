@@ -1,5 +1,7 @@
 export type TopicStatus = "active" | "muted";
 
+export type Settings = { maxStories: number; maxAgeDays: number };
+
 export type Topic = {
   id: string;
   label: string;

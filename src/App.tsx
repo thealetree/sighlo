@@ -1,8 +1,8 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, TouchEvent, useEffect, useMemo, useRef, useState, WheelEvent } from "react";
 import { clusterArticles } from "./clustering";
 import InstallPrompt from "./InstallPrompt";
 import { NEWS_SOURCES, fetchArticleSummary, fetchTopicArticles } from "./news";
-import { readArticles, readSettings, readThemePrefs, readTopics, saveArticles, saveSettings, saveThemePrefs, saveTopics } from "./storage";
+import { readArticles, readDismissedIds, readReadIds, readSettings, readThemePrefs, readTopics, saveArticles, saveDismissedIds, saveReadIds, saveSettings, saveThemePrefs, saveTopics } from "./storage";
 import { DARK_THEMES, LIGHT_THEMES, resolveThemeId, type ThemeDef, type ThemeMode, type ThemePrefs } from "./theme";
 import type { Article, Settings, Story, Topic } from "./types";
 
@@ -23,13 +23,17 @@ function StoryCard({
   topics,
   expanded,
   enriching,
+  read,
   onToggle,
+  onDismiss,
 }: {
   story: Story;
   topics: Topic[];
   expanded: boolean;
   enriching: boolean;
+  read: boolean;
   onToggle: () => void;
+  onDismiss: () => void;
 }) {
   const labels = story.topicIds
     .map((topicId) => topics.find((topic) => topic.id === topicId)?.label)
@@ -40,12 +44,63 @@ function StoryCard({
     relativeTime(story.latestPublishedAt),
   ].filter(Boolean).join("  |  ");
 
+  const [offset, setOffset] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const swipe = useRef({ x: 0, y: 0, axis: "none" as "none" | "h" | "v", moved: false });
+  const SWIPE_DISMISS = 110;
+
+  const onPointerDown = (event: ReactPointerEvent) => {
+    if (expanded) return;
+    swipe.current = { x: event.clientX, y: event.clientY, axis: "none", moved: false };
+  };
+  const onPointerMove = (event: ReactPointerEvent) => {
+    if (expanded || event.buttons === 0) return;
+    const dx = event.clientX - swipe.current.x;
+    const dy = event.clientY - swipe.current.y;
+    if (swipe.current.axis === "none" && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+      swipe.current.axis = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
+      if (swipe.current.axis === "h") {
+        setDragging(true);
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+      }
+    }
+    if (swipe.current.axis === "h") {
+      swipe.current.moved = true;
+      setOffset(dx);
+    }
+  };
+  const endSwipe = () => {
+    if (swipe.current.axis !== "h") return;
+    setDragging(false);
+    if (Math.abs(offset) >= SWIPE_DISMISS) {
+      setOffset(offset > 0 ? 700 : -700);
+      window.setTimeout(onDismiss, 180);
+    } else {
+      setOffset(0);
+    }
+  };
+  const onClickCapture = (event: ReactMouseEvent) => {
+    if (swipe.current.moved) {
+      event.preventDefault();
+      event.stopPropagation();
+      swipe.current.moved = false;
+    }
+  };
+
   return (
-    <article className={`story-card ${expanded ? "is-expanded" : ""}`}>
+    <article
+      className={`story-card ${expanded ? "is-expanded" : ""} ${read ? "is-read" : ""} ${dragging ? "is-dragging" : ""}`}
+      style={{ transform: offset ? `translateX(${offset}px)` : undefined, opacity: offset ? Math.max(0, 1 - Math.abs(offset) / 260) : undefined }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={endSwipe}
+      onPointerCancel={endSwipe}
+    >
       <button
         className="story-trigger"
         type="button"
         onClick={onToggle}
+        onClickCapture={onClickCapture}
         aria-expanded={expanded}
       >
         <h2>{story.headline}</h2>
@@ -94,8 +149,12 @@ export default function App() {
   const [expandedStoryId, setExpandedStoryId] = useState<string | null>(null);
   const [enrichingIds, setEnrichingIds] = useState<Set<string>>(() => new Set());
   const enrichedArticleIds = useRef<Set<string>>(new Set());
+  const [readIds, setReadIds] = useState<Set<string>>(() => new Set(readReadIds()));
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => new Set(readDismissedIds()));
   const [refreshState, setRefreshState] = useState<"idle" | "loading" | "error">("idle");
   const [refreshError, setRefreshError] = useState("");
+  const [pullDistance, setPullDistance] = useState(0);
+  const pull = useRef({ startY: 0, active: false, wheelAccum: 0, distance: 0 });
   const activeTopics = topics.filter((topic) => topic.status === "active");
   const feed = useMemo(() => {
     const cutoff = Date.now() - settings.maxAgeDays * 24 * 60 * 60 * 1000;
@@ -103,14 +162,17 @@ export default function App() {
       (article) =>
         activeTopics.some((topic) => topic.id === article.topicId) &&
         new Date(article.publishedAt).getTime() >= cutoff &&
-        settings.sources[article.feed] !== false,
+        settings.sources[article.feed] !== false &&
+        !dismissedIds.has(article.id),
     );
     return clusterArticles(scoped, topics).slice(0, settings.maxStories);
-  }, [activeTopics, articles, topics, settings.maxAgeDays, settings.maxStories, settings.sources]);
+  }, [activeTopics, articles, topics, settings.maxAgeDays, settings.maxStories, settings.sources, dismissedIds]);
 
   useEffect(() => saveTopics(topics), [topics]);
   useEffect(() => saveArticles(articles), [articles]);
   useEffect(() => saveSettings(settings), [settings]);
+  useEffect(() => saveReadIds([...readIds]), [readIds]);
+  useEffect(() => saveDismissedIds([...dismissedIds]), [dismissedIds]);
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const onChange = () => setSystemDark(media.matches);
@@ -188,7 +250,66 @@ export default function App() {
 
   const toggleStory = (story: Story) => {
     setExpandedStoryId((current) => (current === story.id ? null : story.id));
-    if (expandedStoryId !== story.id) void enrichStory(story);
+    if (expandedStoryId !== story.id) {
+      void enrichStory(story);
+      setReadIds((current) => {
+        const next = new Set(current);
+        story.articles.forEach((article) => next.add(article.id));
+        return next;
+      });
+    }
+  };
+
+  const dismissStory = (story: Story) => {
+    setDismissedIds((current) => {
+      const next = new Set(current);
+      story.articles.forEach((article) => next.add(article.id));
+      return next;
+    });
+    setExpandedStoryId((current) => (current === story.id ? null : current));
+  };
+
+  const PULL_THRESHOLD = 64;
+  const onPullTouchStart = (event: TouchEvent<HTMLElement>) => {
+    if (window.scrollY <= 0) {
+      pull.current.active = true;
+      pull.current.startY = event.touches[0].clientY;
+    }
+  };
+  const onPullTouchMove = (event: TouchEvent<HTMLElement>) => {
+    if (!pull.current.active) return;
+    const delta = event.touches[0].clientY - pull.current.startY;
+    if (delta > 0 && window.scrollY <= 0) {
+      pull.current.distance = Math.min(delta * 0.5, 96);
+      setPullDistance(pull.current.distance);
+    } else {
+      pull.current.active = false;
+      pull.current.distance = 0;
+      setPullDistance(0);
+    }
+  };
+  const onPullTouchEnd = () => {
+    if (!pull.current.active) return;
+    pull.current.active = false;
+    if (pull.current.distance >= PULL_THRESHOLD && refreshState !== "loading") void refresh();
+    pull.current.distance = 0;
+    setPullDistance(0);
+  };
+  // Desktop: overscrolling up past the top (wheel) also refreshes.
+  const onPullWheel = (event: WheelEvent<HTMLElement>) => {
+    if (window.scrollY <= 0 && event.deltaY < 0 && refreshState !== "loading") {
+      pull.current.wheelAccum += -event.deltaY;
+      const distance = Math.min(pull.current.wheelAccum * 0.5, 96);
+      setPullDistance(distance);
+      if (distance >= PULL_THRESHOLD) {
+        pull.current.wheelAccum = 0;
+        setPullDistance(0);
+        void refresh();
+      }
+    } else if (!pull.current.active) {
+      pull.current.wheelAccum = 0;
+      if (pullDistance) setPullDistance(0);
+    }
   };
 
   const togglePanel = (panel: "settings" | "theme") => setOpenPanel((current) => (current === panel ? null : panel));
@@ -209,16 +330,21 @@ export default function App() {
       mode: prefs.mode === "system" ? "system" : theme.mode,
     }));
 
+  const indicatorHeight = refreshState === "loading" ? 52 : pullDistance;
+
   return (
-    <main className="app-shell">
+    <main className="app-shell" onTouchStart={onPullTouchStart} onTouchMove={onPullTouchMove} onTouchEnd={onPullTouchEnd} onWheel={onPullWheel}>
       <InstallPrompt />
+      <div className="pull-indicator" style={{ height: indicatorHeight }} aria-hidden={indicatorHeight === 0}>
+        {refreshState === "loading" ? (
+          <span className="pull-spinner" />
+        ) : (
+          <span className="pull-arrow" style={{ opacity: Math.min(pullDistance / PULL_THRESHOLD, 1), transform: `rotate(${pullDistance >= PULL_THRESHOLD ? 180 : 0}deg)` }}>↓</span>
+        )}
+      </div>
       <header>
         <a className="wordmark" href="/" aria-label="Sighlo home">sighlo</a>
-        {activeTopics.length ? (
-          <button className="refresh-button" type="button" onClick={() => void refresh()} disabled={refreshState === "loading"}>
-            {refreshState === "loading" ? "refreshing" : "refresh"}
-          </button>
-        ) : <p>your personal stream</p>}
+        <p>your personal stream</p>
       </header>
 
       <section className="feed" aria-live="polite">
@@ -231,7 +357,9 @@ export default function App() {
               topics={topics}
               expanded={story.id === expandedStoryId}
               enriching={enrichingIds.has(story.id)}
+              read={story.articles.some((article) => readIds.has(article.id))}
               onToggle={() => toggleStory(story)}
+              onDismiss={() => dismissStory(story)}
             />
           ))
         ) : (

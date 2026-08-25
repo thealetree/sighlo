@@ -5,6 +5,25 @@ const storageKey = "sighlo-topics";
 const articleStorageKey = "sighlo-articles";
 const themeStorageKey = "sighlo-theme";
 const settingsStorageKey = "sighlo-settings";
+const readStorageKey = "sighlo-read";
+const dismissedStorageKey = "sighlo-dismissed";
+
+// Keep the read/dismissed history from growing without bound.
+const ID_HISTORY_CAP = 4000;
+
+function readIdList(key: string): string[] {
+  try {
+    const saved = window.localStorage.getItem(key);
+    return saved ? (JSON.parse(saved) as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export const readReadIds = () => readIdList(readStorageKey);
+export const saveReadIds = (ids: string[]) => window.localStorage.setItem(readStorageKey, JSON.stringify(ids.slice(-ID_HISTORY_CAP)));
+export const readDismissedIds = () => readIdList(dismissedStorageKey);
+export const saveDismissedIds = (ids: string[]) => window.localStorage.setItem(dismissedStorageKey, JSON.stringify(ids.slice(-ID_HISTORY_CAP)));
 
 export const DEFAULT_SETTINGS: Settings = { maxStories: 40, maxAgeDays: 30, sources: { google: true, bing: true } };
 

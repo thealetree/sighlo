@@ -15,7 +15,11 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; background: var(--background); transition: background .2s ease, color .2s ease; }
+body { margin: 0; min-width: 320px; background: var(--background); overscroll-behavior-y: contain; transition: background .2s ease, color .2s ease; }
+.pull-indicator { display: flex; align-items: center; justify-content: center; overflow: hidden; transition: height .2s ease; color: var(--muted); }
+.pull-arrow { font-size: 18px; transition: transform .15s ease, opacity .15s ease; }
+.pull-spinner { width: 18px; height: 18px; border: 2px solid var(--line); border-top-color: var(--muted); border-radius: 50%; animation: sighlo-spin .7s linear infinite; }
+@keyframes sighlo-spin { to { transform: rotate(360deg); } }
 button, input { font: inherit; }
 button { cursor: pointer; }
 
@@ -31,7 +35,10 @@ header p, .refresh-button { margin: 0; color: var(--muted); font-family: ui-mono
 .loading-state { padding: 16vh 5px 0; color: #777; font-size: 12px; }
 .loading-state span { display: inline-block; width: 18px; overflow: hidden; vertical-align: bottom; }
 
-.story-card { overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 5px 12px rgba(0, 0, 0, .08), 0 1px 2px rgba(0, 0, 0, .05); transition: box-shadow .18s ease, border-color .18s ease, transform .18s ease, background .2s ease; }
+.story-card { overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 5px 12px rgba(0, 0, 0, .08), 0 1px 2px rgba(0, 0, 0, .05); transition: box-shadow .18s ease, border-color .18s ease, transform .18s ease, opacity .18s ease, background .2s ease; touch-action: pan-y; }
+.story-card.is-dragging { transition: none; cursor: grabbing; user-select: none; }
+.story-card.is-read:not(.is-expanded) { opacity: .55; }
+.story-card.is-read:not(.is-expanded):hover { opacity: .8; }
 .story-card:hover, .story-card.is-expanded { border-color: var(--muted); box-shadow: 0 10px 23px rgba(0, 0, 0, .105), 0 2px 4px rgba(0, 0, 0, .055); }
 .story-card.is-expanded { position: relative; z-index: 3; }
 .story-card.is-expanded::after { position: absolute; inset: 4px; z-index: 1; pointer-events: none; content: ""; border: 1px solid rgba(18, 18, 16, .48); border-radius: 2px; }

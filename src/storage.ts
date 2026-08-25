@@ -6,7 +6,7 @@ const articleStorageKey = "sighlo-articles";
 const themeStorageKey = "sighlo-theme";
 const settingsStorageKey = "sighlo-settings";
 
-export const DEFAULT_SETTINGS: Settings = { maxStories: 40, maxAgeDays: 30 };
+export const DEFAULT_SETTINGS: Settings = { maxStories: 40, maxAgeDays: 30, sources: { google: true, bing: true } };
 
 // Map the pre-1.0 single-string theme ids onto the current theme set.
 const LEGACY_THEME_MAP: Record<string, Partial<ThemePrefs>> = {
@@ -75,6 +75,7 @@ export function readSettings(): Settings {
     return {
       maxStories: Number.isFinite(parsed.maxStories) ? Number(parsed.maxStories) : DEFAULT_SETTINGS.maxStories,
       maxAgeDays: Number.isFinite(parsed.maxAgeDays) ? Number(parsed.maxAgeDays) : DEFAULT_SETTINGS.maxAgeDays,
+      sources: { ...DEFAULT_SETTINGS.sources, ...(parsed.sources ?? {}) },
     };
   } catch {
     return DEFAULT_SETTINGS;

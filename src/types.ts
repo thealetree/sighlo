@@ -1,6 +1,6 @@
 export type TopicStatus = "active" | "muted";
 
-export type Settings = { maxStories: number; maxAgeDays: number };
+export type Settings = { maxStories: number; maxAgeDays: number; sources: Record<string, boolean> };
 
 export type Topic = {
   id: string;
@@ -18,6 +18,7 @@ export type Article = {
   sourceDomain: string;
   publishedAt: string;
   topicId: string;
+  feed: string;
 };
 
 export type Story = {

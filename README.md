@@ -63,6 +63,7 @@ fills the feed. The aggregators and providers are isolated in `src/news.ts` (see
   card; stories that carry a real summary are surfaced first, older ones drop off
 - Expandable cards showing short bullet summaries (from publishers' own article snippets,
   fetched on demand where possible) plus direct links to read the full story at each source
-- Adjustable feed limits (number of stories, maximum age) in the Settings panel
+- Settings panel with adjustable feed limits (number of stories, maximum age) and per-aggregator
+  source toggles (Google News, Bing News); a separate Theme panel holds the themes
 - Twelve themes (six light, six dark) with explicit Light/Dark selection or system matching,
   and a per-section default used when the OS switches between light and dark

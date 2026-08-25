@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { clusterArticles } from "./clustering";
 import InstallPrompt from "./InstallPrompt";
-import { fetchArticleSummary, fetchTopicArticles } from "./news";
+import { NEWS_SOURCES, fetchArticleSummary, fetchTopicArticles } from "./news";
 import { readArticles, readSettings, readThemePrefs, readTopics, saveArticles, saveSettings, saveThemePrefs, saveTopics } from "./storage";
 import { DARK_THEMES, LIGHT_THEMES, resolveThemeId, type ThemeDef, type ThemeMode, type ThemePrefs } from "./theme";
 import type { Article, Settings, Story, Topic } from "./types";
@@ -87,7 +87,7 @@ export default function App() {
   const [articles, setArticles] = useState<Article[]>(readArticles);
   const [query, setQuery] = useState("");
   const [managerOpen, setManagerOpen] = useState(false);
-  const [themeOpen, setThemeOpen] = useState(false);
+  const [openPanel, setOpenPanel] = useState<"settings" | "theme" | null>(null);
   const [themePrefs, setThemePrefs] = useState<ThemePrefs>(readThemePrefs);
   const [systemDark, setSystemDark] = useState(() => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false);
   const [settings, setSettings] = useState<Settings>(readSettings);
@@ -100,10 +100,13 @@ export default function App() {
   const feed = useMemo(() => {
     const cutoff = Date.now() - settings.maxAgeDays * 24 * 60 * 60 * 1000;
     const scoped = articles.filter(
-      (article) => activeTopics.some((topic) => topic.id === article.topicId) && new Date(article.publishedAt).getTime() >= cutoff,
+      (article) =>
+        activeTopics.some((topic) => topic.id === article.topicId) &&
+        new Date(article.publishedAt).getTime() >= cutoff &&
+        settings.sources[article.feed] !== false,
     );
     return clusterArticles(scoped, topics).slice(0, settings.maxStories);
-  }, [activeTopics, articles, topics, settings.maxAgeDays, settings.maxStories]);
+  }, [activeTopics, articles, topics, settings.maxAgeDays, settings.maxStories, settings.sources]);
 
   useEffect(() => saveTopics(topics), [topics]);
   useEffect(() => saveArticles(articles), [articles]);
@@ -119,11 +122,12 @@ export default function App() {
     saveThemePrefs(themePrefs);
   }, [themePrefs, systemDark]);
 
-  const refresh = async (topicsToRefresh = activeTopics) => {
+  const refresh = async (topicsToRefresh = activeTopics, sources = settings.sources) => {
     if (!topicsToRefresh.length) return;
+    const enabled = Object.keys(sources).filter((name) => sources[name]);
     setRefreshState("loading");
     setRefreshError("");
-    const results = await Promise.allSettled(topicsToRefresh.map(fetchTopicArticles));
+    const results = await Promise.allSettled(topicsToRefresh.map((topic) => fetchTopicArticles(topic, enabled)));
     const fetched = results.flatMap((result) => result.status === "fulfilled" ? result.value : []);
     if (fetched.length) {
       const refreshedIds = new Set(topicsToRefresh.map((topic) => topic.id));
@@ -187,6 +191,14 @@ export default function App() {
     if (expandedStoryId !== story.id) void enrichStory(story);
   };
 
+  const togglePanel = (panel: "settings" | "theme") => setOpenPanel((current) => (current === panel ? null : panel));
+
+  const toggleSource = (id: string) => {
+    const sources = { ...settings.sources, [id]: !settings.sources[id] };
+    setSettings((current) => ({ ...current, sources }));
+    void refresh(activeTopics, sources);
+  };
+
   // Select a theme within its section. In an explicit Light/Dark mode this also switches to
   // that mode so the choice previews immediately; in System mode it just updates the
   // section's default (the theme used when the OS is in that mode).
@@ -244,14 +256,20 @@ export default function App() {
         {managerOpen && (
           <div className="topic-manager" aria-label="Your topics">
             <div className="manager-topbar">
-              <button className="settings-toggle" type="button" onClick={() => setThemeOpen((open) => !open)} aria-expanded={themeOpen}>
-                <span>Settings</span>
-                <span className={`settings-chevron ${themeOpen ? "is-open" : ""}`} aria-hidden="true">›</span>
-              </button>
+              <div className="manager-tabs">
+                <button className="menu-tab" type="button" onClick={() => togglePanel("settings")} aria-expanded={openPanel === "settings"}>
+                  <span>Settings</span>
+                  <span className={`settings-chevron ${openPanel === "settings" ? "is-open" : ""}`} aria-hidden="true">›</span>
+                </button>
+                <button className="menu-tab" type="button" onClick={() => togglePanel("theme")} aria-expanded={openPanel === "theme"}>
+                  <span>Theme</span>
+                  <span className={`settings-chevron ${openPanel === "theme" ? "is-open" : ""}`} aria-hidden="true">›</span>
+                </button>
+              </div>
               <button className="manager-close" type="button" onClick={() => setManagerOpen(false)} aria-label="Close menu">×</button>
             </div>
             <div className="manager-scroll">
-            {themeOpen && (
+            {openPanel === "theme" && (
               <div className="theme-panel">
                 <div className="mode-row" role="group" aria-label="Theme mode">
                   {(["light", "dark", "system"] as ThemeMode[]).map((mode) => (
@@ -285,8 +303,8 @@ export default function App() {
                 ))}
               </div>
             )}
-            {themeOpen && (
-              <div className="limits-section">
+            {openPanel === "settings" && (
+              <div className="settings-panel">
                 <p className="eyebrow">Feed limits</p>
                 <label className="limit-row">
                   <span>Stories shown</span>
@@ -300,6 +318,22 @@ export default function App() {
                     {AGE_LIMITS.map((value) => <option key={value} value={value}>{ageLabel(value)}</option>)}
                   </select>
                 </label>
+                <p className="eyebrow limits-subhead">News sources</p>
+                {NEWS_SOURCES.map((source) => (
+                  <div className="limit-row source-row" key={source.id}>
+                    <span>{source.label}</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={settings.sources[source.id] !== false}
+                      aria-label={source.label}
+                      className={`source-switch ${settings.sources[source.id] !== false ? "is-on" : ""}`}
+                      onClick={() => toggleSource(source.id)}
+                    >
+                      <span className="source-knob" />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
             <div className="manager-divider" />
@@ -327,10 +361,11 @@ export default function App() {
             placeholder="Add a topic"
             aria-label="Add a topic"
           />
-          {managerOpen && <button className="add-button" type="submit">Add</button>}
-          <button className="manager-button" type="button" onClick={() => setManagerOpen((open) => !open)} aria-label="Manage topics">
-            {managerOpen ? "×" : "≡"}
-          </button>
+          {managerOpen ? (
+            <button className="add-button" type="submit">Add</button>
+          ) : (
+            <button className="manager-button" type="button" onClick={() => setManagerOpen(true)} aria-label="Manage topics">≡</button>
+          )}
         </form>
       </div>
     </main>

@@ -129,7 +129,7 @@ function cleanSnippet(html: string, title: string): string {
   return text;
 }
 
-function buildArticle(topic: Topic, raw: { title: string; url: string; sourceName: string; publishedAt: string; description?: string }): Article[] {
+function buildArticle(topic: Topic, feed: string, raw: { title: string; url: string; sourceName: string; publishedAt: string; description?: string }): Article[] {
   const title = raw.title.trim();
   const publishedAt = parseDate(raw.publishedAt);
   if (!title || !raw.url || Number.isNaN(new Date(publishedAt).getTime())) return [];
@@ -142,6 +142,7 @@ function buildArticle(topic: Topic, raw: { title: string; url: string; sourceNam
     sourceName: raw.sourceName,
     sourceDomain: domainOf(raw.url),
     publishedAt,
+    feed,
   }];
 }
 
@@ -149,6 +150,7 @@ function buildArticle(topic: Topic, raw: { title: string; url: string; sourceNam
 // articles (each aggregator formats titles/links/source differently).
 type Feed = {
   name: string;
+  label: string;
   buildUrl: (query: string) => string;
   toArticles: (topic: Topic, items: RawItem[]) => Article[];
 };
@@ -156,21 +158,23 @@ type Feed = {
 const FEEDS: Feed[] = [
   {
     name: "google",
+    label: "Google News",
     buildUrl: (query) =>
       `https://news.google.com/rss/search?${new URLSearchParams({ q: query, hl: "en-US", gl: "US", ceid: "US:en" })}`,
     toArticles: (topic, items) =>
       items.flatMap((item) => {
         const { title, sourceName } = splitTitle(item.title);
-        return buildArticle(topic, { title, url: item.link, sourceName, publishedAt: item.pubDate, description: item.description });
+        return buildArticle(topic, "google", { title, url: item.link, sourceName, publishedAt: item.pubDate, description: item.description });
       }),
   },
   {
     name: "bing",
+    label: "Bing News",
     buildUrl: (query) => `https://www.bing.com/news/search?${new URLSearchParams({ q: query, format: "rss" })}`,
     toArticles: (topic, items) =>
       items.flatMap((item) => {
         const url = unwrapRedirect(item.link);
-        return buildArticle(topic, {
+        return buildArticle(topic, "bing", {
           title: item.title,
           url,
           sourceName: domainOf(url) || "Unknown source",
@@ -180,6 +184,9 @@ const FEEDS: Feed[] = [
       }),
   },
 ];
+
+// The aggregators users can turn on and off, for the Settings panel.
+export const NEWS_SOURCES = FEEDS.map((feed) => ({ id: feed.name, label: feed.label }));
 
 // Lazily fetch a real article page (through the CORS proxy) and pull a one-line summary
 // from its metadata. Only works for real publisher URLs — Google's opaque redirect links
@@ -207,10 +214,13 @@ export async function fetchArticleSummary(url: string): Promise<string> {
   }
 }
 
-export async function fetchTopicArticles(topic: Topic): Promise<Article[]> {
-  // Query every aggregator in parallel; one failing shouldn't lose the others.
+export async function fetchTopicArticles(topic: Topic, enabledSources?: string[]): Promise<Article[]> {
+  const feeds = enabledSources ? FEEDS.filter((feed) => enabledSources.includes(feed.name)) : FEEDS;
+  if (!feeds.length) return [];
+
+  // Query every enabled aggregator in parallel; one failing shouldn't lose the others.
   const results = await Promise.allSettled(
-    FEEDS.map(async (feed) => feed.toArticles(topic, await fetchFeedItems(feed.buildUrl(topic.label)))),
+    feeds.map(async (feed) => feed.toArticles(topic, await fetchFeedItems(feed.buildUrl(topic.label)))),
   );
 
   const merged = results.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
